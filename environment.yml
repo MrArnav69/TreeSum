@@ -1,0 +1,24 @@
+name: treesum
+channels:
+  - pytorch
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+  - numpy
+  - pandas
+  - tqdm
+  - pip:
+      - transformers
+      - datasets
+      - evaluate
+      - rouge-score
+      - sentence-transformers
+      - spacy
+      - nltk
+      - scikit-learn
+      - huggingface_hub

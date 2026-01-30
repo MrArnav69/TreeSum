@@ -1,5 +1,5 @@
 import torch
-from transformers import PegasusForConditionalGeneration, PegasusTokenizerFast
+from transformers import PegasusForConditionalGeneration, AutoTokenizer
 from typing import List, Dict, Optional, Union
 import time
 import logging
@@ -54,7 +54,7 @@ class HierarchicalSummarizer:
         
         # 2. Load Model & Tokenizer (Fast Rust-based tokenizer)
         try:
-            self.tokenizer = PegasusTokenizerFast.from_pretrained(model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
             self.model = PegasusForConditionalGeneration.from_pretrained(model_name).to(self.device)
             # FP16 inference for speed if on CUDA (MPS support varies)
             if self.device == 'cuda':

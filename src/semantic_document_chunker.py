@@ -5,7 +5,7 @@ A robust, production-ready chunker that preserves semantic coherence through
 sentence embeddings, adaptive overlap selection, and comprehensive validation.
 
 Key Features:
-1. Sentence-boundary preservation (never splits mi d-sentence)
+1. Sentence-boundary preservation (never splits mid-sentence)
 2. Semantic coherence via sentence embeddings with cosine similarity
 3. Data-driven adaptive overlap based on semantic similarity
 4. Paragraph and discourse-aware chunking

@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "rouge1": 47.78,
+    "rouge2": 19.24,
+    "rougeL": 23.69,
+    "rougeLsum": 23.84
+  },
+  "flat_concat": {
+    "rouge1": 46.7,
+    "rouge2": 18.41,
+    "rougeL": 22.91,
+    "rougeLsum": 22.84
+  },
+  "map_reduce": {
+    "rouge1": 46.22,
+    "rouge2": 16.2,
+    "rougeL": 21.27,
+    "rougeLsum": 21.28
+  }
+}

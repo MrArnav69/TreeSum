@@ -1,0 +1,10 @@
+{
+  "num_samples": 20,
+  "metrics": {
+    "rouge1": 0.451878816972488,
+    "rouge2": 0.1473979799473847,
+    "rougeL": 0.20682281968344182,
+    "rougeLsum": 0.20633585491438394
+  },
+  "config": "Hierarchical PEGASUS (SOTA Chunking)"
+}

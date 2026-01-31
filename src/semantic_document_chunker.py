@@ -128,6 +128,7 @@ class SemanticDocumentChunker:
                  semantic_model: Optional[str] = None,
                  semantic_similarity_threshold: float = 0.7,
                  adaptive_overlap: bool = True,
+                 semantic_weight: float = 0.7,
                  ablation_mode: Optional[str] = None,
                  enable_validation: bool = True,
                  validate_overlap_tokens: bool = True,
@@ -178,10 +179,14 @@ class SemanticDocumentChunker:
         self.preserve_paragraphs = preserve_paragraphs
         self.semantic_similarity_threshold = semantic_similarity_threshold
         self.adaptive_overlap = adaptive_overlap
+        self.semantic_weight = semantic_weight
         self.ablation_mode = ablation_mode
         self.enable_validation = enable_validation
         self.validate_overlap_tokens = validate_overlap_tokens
         self.validate_semantic_coherence = validate_semantic_coherence
+        
+        # Initial default
+        self.use_semantic_coherence = use_semantic_coherence and SEMANTIC_AVAILABLE
         
         # Apply ablation mode settings
         if ablation_mode == 'no_semantic':
@@ -202,8 +207,6 @@ class SemanticDocumentChunker:
             self.overlap_tokens = self.overlap_tokens * 2
         elif ablation_mode == 'small_overlap':
             self.overlap_tokens = self.overlap_tokens // 2
-        else:
-            self.use_semantic_coherence = use_semantic_coherence and SEMANTIC_AVAILABLE
         
         # Performance tracking
         self._performance_stats = {
@@ -762,9 +765,10 @@ class SemanticDocumentChunker:
             lexical_sims = lexical_sims / np.max(lexical_sims)
             
         # 3. Hybrid Signal Combination
-        # Weighting: 70% Semantic (Abstract), 30% Lexical (Exact)
-        # This is empirically robust for news (TextTiling-esque)
-        hybrid_sims = 0.7 * semantic_sims + 0.3 * lexical_sims
+        # Weighting: alpha Semantic (Abstract), (1-alpha) Lexical (Exact)
+        # alpha is controlled by self.semantic_weight
+        alpha = self.semantic_weight
+        hybrid_sims = alpha * semantic_sims + (1.0 - alpha) * lexical_sims
         
         # 4. Gaussian Smoothing (Noise Reduction)
         # Sigma=1.0 smooths out single-sentence jaggedness

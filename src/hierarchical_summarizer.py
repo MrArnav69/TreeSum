@@ -29,6 +29,7 @@ class HierarchicalSummarizer:
                  model_name: str = "google/pegasus-multi_news",
                  device: Optional[str] = None,
                  batch_size: int = 4,
+                 semantic_weight: float = 0.7,
                  chunker: Optional[SemanticDocumentChunker] = None):
         """
         Initialize the summarizer.
@@ -74,7 +75,8 @@ class HierarchicalSummarizer:
                 max_tokens=1024,
                 overlap_tokens=128,
                 use_semantic_coherence=True,
-                adaptive_overlap=True # SOTA mode
+                adaptive_overlap=True, # SOTA mode
+                semantic_weight=semantic_weight
             )
             
     def _generate(self, inputs: List[str], max_length: int = 512, min_length: int = 64) -> List[str]:

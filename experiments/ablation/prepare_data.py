@@ -7,7 +7,7 @@ from datasets import load_dataset
 # Config
 NUM_SAMPLES = 20
 SEED = 42
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), '../results/ablation/ablation_data.json')
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples/ablation_data.json')
 os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
 def prepare_data():

@@ -10,7 +10,7 @@ sns.set_theme(style="whitegrid")
 plt.rcParams['font.family'] = 'serif'
 
 # Paths
-RESULT_DIR = os.path.join(os.path.dirname(__file__), '../results/ablation')
+RESULT_DIR = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples')
 CSV_PATH = os.path.join(RESULT_DIR, 'ablation_results.csv')
 CHART_PATH = os.path.join(RESULT_DIR, 'ablation_comparison.png')
 LATEX_PATH = os.path.join(RESULT_DIR, 'ablation_table.tex')

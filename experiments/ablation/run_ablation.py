@@ -8,12 +8,12 @@ from tqdm import tqdm
 import sys
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 from hierarchical_summarizer import HierarchicalSummarizer
 
 # Config
-DATA_PATH = os.path.join(os.path.dirname(__file__), '../results/ablation/ablation_data.json')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../results/ablation')
+DATA_PATH = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples/ablation_data.json')
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples')
 DEVICE = 'cpu' # Force CPU to avoid MPS hangs on large recursion
 
 def run_experiment_v2():

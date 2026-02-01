@@ -8,13 +8,13 @@ from tqdm import tqdm
 import sys
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 from hierarchical_summarizer import HierarchicalSummarizer
 
 # Config
-DATA_PATH = os.path.join(os.path.dirname(__file__), '../results/ablation/ablation_data.json')
-CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), '../results/ablation/ablation_checkpoint.json')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../results/ablation')
+DATA_PATH = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples/ablation_data.json')
+CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples/ablation_checkpoint.json')
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples')
 DEVICE = 'cpu' # Stay on CPU for stability
 
 def run_treesum_only():

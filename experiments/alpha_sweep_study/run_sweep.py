@@ -8,12 +8,12 @@ from tqdm import tqdm
 import sys
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 from hierarchical_summarizer import HierarchicalSummarizer
 
 # Config
-DATA_PATH = os.path.join(os.path.dirname(__file__), '../results/ablation/ablation_data.json')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../results/alpha_sweep')
+DATA_PATH = os.path.join(os.path.dirname(__file__), '../../results/ablation_20_samples/ablation_data.json')
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../../results/alpha_sweep_20_samples')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 DEVICE = 'cpu' # Stay on CPU for stability
 

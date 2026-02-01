@@ -27,42 +27,50 @@ class HierarchicalSummarizer:
     
     def __init__(self, 
                  model_name: str = "google/pegasus-multi_news",
-                 device: Optional[str] = None,
-                 batch_size: int = 4,
-                 semantic_weight: float = 0.7,
-                 chunker: Optional[SemanticDocumentChunker] = None):
-        """
-        Initialize the summarizer.
-        
-        Args:
-            model_name: HuggingFace model hub ID.
-            device: 'cuda', 'mps', or 'cpu'. Auto-detected if None.
-            batch_size: Batch size for chunk summarization.
-            chunker: Pre-initialized chunker instance.
-        """
-        # 1. Device Selection
-        if device is None:
-            if torch.cuda.is_available():
-                self.device = 'cuda'
-            elif torch.backends.mps.is_available():
-                self.device = 'mps'
-            else:
-                self.device = 'cpu'
+             device: Optional[str] = None,
+             batch_size: int = 4,
+             semantic_weight: float = 0.7,
+             dtype: Optional[torch.dtype] = None,
+             chunker: Optional[SemanticDocumentChunker] = None):
+    """
+    Initialize the summarizer.
+    
+    Args:
+        model_name: HuggingFace model hub ID.
+        device: 'cuda', 'mps', or 'cpu'. Auto-detected if None.
+        batch_size: Batch size for chunk summarization.
+        dtype: torch.dtype (e.g. torch.bfloat16). Defaults to precision appropriate for device.
+        chunker: Pre-initialized chunker instance.
+    """
+    # 1. Device Selection
+    if device is None:
+        if torch.cuda.is_available():
+            self.device = 'cuda'
+        elif torch.backends.mps.is_available():
+            self.device = 'mps'
         else:
-            self.device = device
-            
-        logger.info(f"Initializing HierarchicalSummarizer on {self.device}")
+            self.device = 'cpu'
+    else:
+        self.device = device
         
-        # 2. Load Model & Tokenizer (Fast Rust-based tokenizer)
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-            self.model = PegasusForConditionalGeneration.from_pretrained(model_name).to(self.device)
-            # FP16 inference for speed if on CUDA (MPS support varies)
-            if self.device == 'cuda':
-                self.model = self.model.half()
-        except Exception as e:
-            logger.error(f"Failed to load model {model_name}: {e}")
-            raise
+    logger.info(f"Initializing HierarchicalSummarizer on {self.device}")
+    
+    # 2. Dtype Selection
+    if dtype is None:
+        self.dtype = torch.bfloat16 if self.device == 'cuda' else torch.float32
+    else:
+        self.dtype = dtype
+
+    # 3. Load Model & Tokenizer
+    try:
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        self.model = PegasusForConditionalGeneration.from_pretrained(
+            model_name, 
+            torch_dtype=self.dtype
+        ).to(self.device)
+    except Exception as e:
+        logger.error(f"Failed to load model {model_name}: {e}")
+        raise
             
         self.batch_size = batch_size
         

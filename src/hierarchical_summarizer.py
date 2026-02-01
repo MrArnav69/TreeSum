@@ -80,7 +80,7 @@ class HierarchicalSummarizer:
         else:
             self.chunker = SemanticDocumentChunker(
                 tokenizer=self.tokenizer,
-                max_tokens=1024,
+                max_tokens=1000, # Safety buffer (model limit 1024)
                 overlap_tokens=128,
                 use_semantic_coherence=True,
                 adaptive_overlap=True, # SOTA mode
@@ -100,19 +100,23 @@ class HierarchicalSummarizer:
             return_tensors="pt"
         ).to(self.device)
         
-        # Generate with SOTA parameters for Multi-News
-        # - num_beams=8: Standard for high quality abstractive summ
-        # - length_penalty=1.2: Tuned for Multi-News (longer summaries = higher Recall)
-        # - max_length=1024: Allow full length generation
         try:
+            # SOTA Stability Profile:
+            # 1. repetition_penalty=1.5: Fixes "word salad" loops on A40
+            # 2. neutral length_penalty: Prevents forced hallucination
+            # 3. lower beams: Faster and more stable in float32
             summary_ids = self.model.generate(
-                batch["input_ids"],
-                num_beams=8, 
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                num_beams=4, 
                 max_length=max_length,
-                min_length=min_length,
-                length_penalty=1.2, # UPDATED: Encourages longer output (prev 0.8)
+                min_length=min_length if max_length > 256 else 0, # Chunk safety
+                length_penalty=1.0, 
+                repetition_penalty=1.5, 
                 no_repeat_ngram_size=3,
-                early_stopping=True
+                early_stopping=True,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
             )
             
             # Decode

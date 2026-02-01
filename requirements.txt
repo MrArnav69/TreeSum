@@ -1,0 +1,15 @@
+torch
+transformers
+datasets
+evaluate
+rouge_score
+sentencepiece
+protobuf
+tiktoken
+tqdm
+numpy
+pandas
+nltk
+sentence-transformers
+scipy
+psutil

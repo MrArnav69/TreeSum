@@ -1,24 +1,28 @@
 name: treesum
 channels:
   - pytorch
+  - nvidia
   - defaults
   - conda-forge
 dependencies:
   - python=3.10
-  - pip
   - pytorch
   - torchvision
   - torchaudio
-  - numpy
+  - pytorch-cuda=12.1
   - pandas
+  - numpy
+  - scipy
   - tqdm
+  - pip
   - pip:
       - transformers
       - datasets
       - evaluate
-      - rouge-score
+      - rouge_score
+      - sentencepiece
+      - protobuf
+      - tiktoken
       - sentence-transformers
-      - spacy
       - nltk
-      - scikit-learn
-      - huggingface_hub
+      - psutil

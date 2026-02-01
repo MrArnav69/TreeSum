@@ -23,7 +23,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 PRECISION = torch.bfloat16  # Optimized for A40
-BATCH_SIZE = 8             # Number of documents to process in parallel (VRAM dependent)
+BATCH_SIZE = 32            # Number of chunks to process in parallel (VRAM dependent)
 ALPHA_VALUES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
 def run_hpc_sweep():
@@ -50,7 +50,8 @@ def run_hpc_sweep():
         summarizer = HierarchicalSummarizer(
             device=DEVICE, 
             semantic_weight=alpha,
-            dtype=PRECISION
+            dtype=PRECISION,
+            batch_size=BATCH_SIZE
         )
         
         predictions = []

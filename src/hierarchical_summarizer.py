@@ -177,7 +177,7 @@ class HierarchicalSummarizer:
             
         return chunk_summaries
 
-    def _stage2_reduce_summaries(self, chunk_summaries: List[str]) -> (str, str):
+    def _stage2_reduce_summaries(self, chunk_summaries: List[str]) -> Tuple[str, str]:
         """
         Stage 2 (Reduce): Recursively summarize chunk summaries until they fit valid context.
         

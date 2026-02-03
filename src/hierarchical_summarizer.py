@@ -80,7 +80,7 @@ class HierarchicalSummarizer:
         else:
             self.chunker = SemanticDocumentChunker(
                 tokenizer=self.tokenizer,
-                max_tokens=1024,
+                max_tokens=1000, # Safety buffer (model limit 1024)
                 overlap_tokens=128,
                 use_semantic_coherence=True,
                 adaptive_overlap=True, # SOTA mode
@@ -100,20 +100,19 @@ class HierarchicalSummarizer:
             return_tensors="pt"
         ).to(self.device)
         
-        # Generate with SOTA parameters for Multi-News
-        # - num_beams=8: Standard for high quality abstractive summ
-        # - length_penalty=1.2: Tuned for Multi-News (longer summaries = higher Recall)
-        # - max_length=1024: Allow full length generation
         try:
-            summary_ids = self.model.generate(
-                batch["input_ids"],
-                num_beams=8, 
-                max_length=max_length,
-                min_length=min_length,
-                length_penalty=1.2, # UPDATED: Encourages longer output (prev 0.8)
-                no_repeat_ngram_size=3,
-                early_stopping=True
-            )
+            # 🚀 MAC-NATIVE STABLE PROFILE (Standard Pegasus Settings)
+            with torch.no_grad():
+                summary_ids = self.model.generate(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    num_beams=8, 
+                    max_length=max_length,
+                    min_length=min_length,
+                    length_penalty=0.8, 
+                    no_repeat_ngram_size=3,
+                    early_stopping=True
+                )
             
             # Decode
             summaries = self.tokenizer.batch_decode(summary_ids, skip_special_tokens=True)

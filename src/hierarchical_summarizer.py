@@ -101,18 +101,23 @@ class HierarchicalSummarizer:
         ).to(self.device)
         
         try:
-            # 🚀 MAC-NATIVE STABLE PROFILE (Standard Pegasus Settings)
-            with torch.no_grad():
-                summary_ids = self.model.generate(
-                    input_ids=batch["input_ids"],
-                    attention_mask=batch["attention_mask"],
-                    num_beams=8, 
-                    max_length=max_length,
-                    min_length=min_length,
-                    length_penalty=0.8, 
-                    no_repeat_ngram_size=3,
-                    early_stopping=True
-                )
+            # SOTA Stability Profile:
+            # 1. repetition_penalty=1.5: Fixes "word salad" loops on A40
+            # 2. neutral length_penalty: Prevents forced hallucination
+            # 3. lower beams: Faster and more stable in float32
+            summary_ids = self.model.generate(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                num_beams=4, 
+                max_length=max_length,
+                min_length=min_length if max_length > 256 else 0, # Chunk safety
+                length_penalty=1.0, 
+                repetition_penalty=1.5, 
+                no_repeat_ngram_size=3,
+                early_stopping=True,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
             
             # Decode
             summaries = self.tokenizer.batch_decode(summary_ids, skip_special_tokens=True)

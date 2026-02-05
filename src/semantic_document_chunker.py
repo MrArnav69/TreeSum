@@ -500,15 +500,7 @@ class SemanticDocumentChunker:
         
         return overlap_sentences
     
-    def clean_text(self, text: str) -> str:
-        """Clean and normalize input text while preserving structure."""
-        text = re.sub(r'Enlarge this image.*?AP', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'toggle caption.*?AP', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'\[.*?\]', '', text)
-        text = re.sub(r' +', ' ', text)
-        text = re.sub(r'\n\n+', '\n\n', text)
-        return text.strip()
-    
+    c
     def split_into_articles(self, document: str) -> List[str]:
         """Split multi-document cluster into individual articles."""
         articles = [art.strip() for art in document.split("|||") if len(art.strip()) > 0]

@@ -1,0 +1,11 @@
+{
+  "num_samples": 1000,
+  "rouge1": 20.563980292049912,
+  "rouge2": 1.787141771586641,
+  "rougeL": 12.86366107028466,
+  "rougeLsum": 12.86728105737572,
+  "bertscore_precision": 49.345874038338664,
+  "bertscore_recall": 46.285828220844266,
+  "bertscore_f1": 47.746205657720566,
+  "avg_chunks_per_doc": 2.936
+}

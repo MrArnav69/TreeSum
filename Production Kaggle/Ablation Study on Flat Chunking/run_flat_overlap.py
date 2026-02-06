@@ -209,11 +209,8 @@ class HierarchicalSummarizerOverlap:
             
         logger.info(f"Initializing HierarchicalSummarizerOverlap on {self.device}")
         
-        # Dtype Selection (P100 optimized: float16 for speed)
-        if dtype is None:
-            self.dtype = torch.float16 if self.device == 'cuda' else torch.float32
-        else:
-            self.dtype = dtype
+        # Dtype Selection (Fixed: float32 to prevent hallucinations)
+        self.dtype = torch.float32
         
         # Load Model & Tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
@@ -501,12 +498,14 @@ def run_ablation_flat_overlap():
     print("\n[6/7] Computing ROUGE Scores...")
     rouge_results = rouge.compute(predictions=all_predictions, references=all_references)
     
-    print("Computing BERTScore...")
+    print("Computing BERTScore (on CPU to prevent OOM)...")
     bert_results = bertscore.compute(
         predictions=all_predictions, 
         references=all_references, 
         lang="en",
-        model_type="microsoft/deberta-xlarge-mnli"
+        model_type="microsoft/deberta-xlarge-mnli",
+        device="cpu",
+        batch_size=16
     )
     
     # 8. Aggregate Metrics

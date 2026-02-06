@@ -77,7 +77,7 @@ import nltk
 # ============================================================================
 RANDOM_SEED = 42
 NUM_SAMPLES = 1000
-BATCH_SIZE = 4  # Reduced from 8 for stability on P100
+BATCH_SIZE = 2  # Reduced from 8 for stability on P100
 MAX_TOKENS = 1024  # Strict limit (Pegasus max positional embeddings)
 CHECKPOINT_INTERVAL = 100  # Save checkpoint every N samples
 
@@ -193,11 +193,8 @@ class HierarchicalSummarizerFlat:
             
         logger.info(f"Initializing HierarchicalSummarizerFlat on {self.device}")
         
-        # Dtype Selection (P100 optimized: float16 for speed)
-        if dtype is None:
-            self.dtype = torch.float16 if self.device == 'cuda' else torch.float32
-        else:
-            self.dtype = dtype
+        # Dtype Selection (Fixed: float32 to prevent hallucinations)
+        self.dtype = torch.float32
         
         # Load Model & Tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
@@ -484,12 +481,14 @@ def run_ablation_flat_1024():
     print("\n[6/7] Computing ROUGE Scores...")
     rouge_results = rouge.compute(predictions=all_predictions, references=all_references)
     
-    print("Computing BERTScore...")
+    print("Computing BERTScore (on CPU to prevent OOM)...")
     bert_results = bertscore.compute(
         predictions=all_predictions, 
         references=all_references, 
         lang="en",
-        model_type="microsoft/deberta-xlarge-mnli"
+        model_type="microsoft/deberta-xlarge-mnli",
+        device="cpu",
+        batch_size=16
     )
     
     # 7. Aggregate Metrics

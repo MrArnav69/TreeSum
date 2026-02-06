@@ -69,27 +69,39 @@ import torch
 def load_summaries_from_batches(results_dir: str) -> List[Dict]:
     """
     Load all summaries from batch files (summaries_batch_1.json, etc.)
-    
-    Returns:
-        List of dicts with 'generated_summary' and 'reference_summary'
+    Recursively searches subdirectories if needed.
     """
     all_results = []
-    batch_num = 1
     
-    while True:
-        batch_file = os.path.join(results_dir, f'summaries_batch_{batch_num}.json')
-        
-        if not os.path.exists(batch_file):
-            break
-        
+    # 1. First, search the directory itself
+    batch_files = [f for f in os.listdir(results_dir) if f.startswith('summaries_batch_') and f.endswith('.json')]
+    
+    # 2. If no batches found, look in immediate subdirectories (one level deep)
+    if not batch_files:
+        print(f"No batch files found in {results_dir}, searching subdirectories...")
+        for entry in os.scandir(results_dir):
+            if entry.is_dir():
+                sub_batches = [f for f in os.listdir(entry.path) if f.startswith('summaries_batch_') and f.endswith('.json')]
+                if sub_batches:
+                    print(f"Found batches in {entry.path}")
+                    results_dir = entry.path # Switch to this directory
+                    batch_files = sub_batches
+                    break
+    
+    if not batch_files:
+        return []
+
+    # Sort batch files numerically
+    batch_files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    
+    for filename in batch_files:
+        batch_file = os.path.join(results_dir, filename)
         print(f"Loading {batch_file}...")
         with open(batch_file, 'r') as f:
             batch_data = json.load(f)
             all_results.extend(batch_data)
-        
-        batch_num += 1
     
-    print(f"✓ Loaded {len(all_results)} summaries from {batch_num - 1} batch files\n")
+    print(f"✓ Loaded {len(all_results)} summaries total\n")
     return all_results
 
 # ============================================================================
@@ -202,13 +214,20 @@ def main():
     # Auto-detect results directory if not specified
     if args.results_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        candidates = ['results_flat_overlap', 'results_flat_1024']
+        candidates = ['results_flat_overlap', 'results_flat_1024', 'Overlap 1024', 'Flat 1024']
         
         for candidate in candidates:
-            candidate_path = os.path.join(script_dir, candidate)
-            if os.path.exists(candidate_path):
-                args.results_dir = candidate_path
-                print(f"Auto-detected results directory: {candidate}")
+            # 1. Check relative to script's directory (Robust for local runs)
+            path_rel_script = os.path.join(script_dir, candidate)
+            # 2. Check relative to current CWD (Works if user is already in the folder)
+            path_rel_cwd = os.path.abspath(candidate)
+            
+            for candidate_path in [path_rel_script, path_rel_cwd]:
+                if os.path.exists(candidate_path) and os.path.isdir(candidate_path):
+                    args.results_dir = candidate_path
+                    print(f"Auto-detected results directory: {candidate}")
+                    break
+            if args.results_dir:
                 break
         
         if args.results_dir is None:

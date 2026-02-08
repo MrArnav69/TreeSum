@@ -1,0 +1,13 @@
+{
+  "method": "Flat_1024_NoOverlap",
+  "num_samples": 1000,
+  "rouge1": 45.555101787673195,
+  "rouge2": 17.761547359161924,
+  "rougeL": 23.218672458632266,
+  "rougeLsum": 23.235843853163964,
+  "bertscore_precision": 66.4708314806223,
+  "bertscore_recall": 63.798721832036975,
+  "bertscore_f1": 65.03975651860237,
+  "avg_chunks_per_doc": 2.747,
+  "total_runtime_hours": 6.680243836045265
+}

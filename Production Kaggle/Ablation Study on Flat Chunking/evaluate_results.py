@@ -214,7 +214,7 @@ def main():
     # Auto-detect results directory if not specified
     if args.results_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        candidates = ['results_flat_overlap', 'results_flat_1024', 'Overlap 1024', 'Flat 1024']
+        candidates = ['results_flat_overlap', 'results_flat_1024', 'Overlap 1024', 'Flat 1024', 'Flat 1024 Overlap']
         
         for candidate in candidates:
             # 1. Check relative to script's directory (Robust for local runs)

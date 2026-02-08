@@ -31,7 +31,8 @@ class HierarchicalSummarizer:
                  batch_size: int = 4,
                  semantic_weight: float = 0.7,
                  dtype: Optional[torch.dtype] = None,
-                 chunker: Optional[SemanticDocumentChunker] = None):
+                 chunker: Optional[SemanticDocumentChunker] = None,
+                 context_aware: bool = True): # TreeSum 2.1 Feature
         """
         Initialize the summarizer.
         
@@ -41,6 +42,7 @@ class HierarchicalSummarizer:
             batch_size: Batch size for chunk summarization.
             dtype: torch.dtype (e.g. torch.bfloat16). Defaults to precision appropriate for device.
             chunker: Pre-initialized chunker instance.
+            context_aware: If True, uses sequential recurrent summarization (Higher Quality).
         """
         # 1. Device Selection
         if device is None:
@@ -73,6 +75,7 @@ class HierarchicalSummarizer:
             raise
                 
         self.batch_size = batch_size
+        self.context_aware = context_aware
         
         # 3. Initialize Chunker (SOTA configuration)
         if chunker:
@@ -101,23 +104,18 @@ class HierarchicalSummarizer:
         ).to(self.device)
         
         try:
-            # SOTA Stability Profile:
-            # 1. repetition_penalty=1.5: Fixes "word salad" loops on A40
-            # 2. neutral length_penalty: Prevents forced hallucination
-            # 3. lower beams: Faster and more stable in float32
-            summary_ids = self.model.generate(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                num_beams=4, 
-                max_length=max_length,
-                min_length=min_length if max_length > 256 else 0, # Chunk safety
-                length_penalty=1.0, 
-                repetition_penalty=1.5, 
-                no_repeat_ngram_size=3,
-                early_stopping=True,
-                pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id
-            )
+            # ðŸš€ MAC-NATIVE STABLE PROFILE (Standard Pegasus Settings)
+            with torch.no_grad():
+                summary_ids = self.model.generate(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    num_beams=8, 
+                    max_length=max_length,
+                    min_length=min_length,
+                    length_penalty=0.8, 
+                    no_repeat_ngram_size=3,
+                    early_stopping=True
+                )
             
             # Decode
             summaries = self.tokenizer.batch_decode(summary_ids, skip_special_tokens=True)
@@ -148,7 +146,10 @@ class HierarchicalSummarizer:
             return {'final_summary': "", 'chunk_summaries': [], 'chunks': []}
             
         # Stage 2: Map (Chunk Summarization)
-        chunk_summaries = self._stage1_map_summaries(chunk_texts)
+        if self.context_aware:
+            chunk_summaries = self._stage1_context_aware_map(chunk_texts)
+        else:
+            chunk_summaries = self._stage1_map_summaries(chunk_texts)
             
         # Stage 3: Reduce (Aggregation & Final Summarization)
         final_summary, concatenated_summary = self._stage2_reduce_summaries(chunk_summaries)
@@ -159,6 +160,34 @@ class HierarchicalSummarizer:
             'chunks': chunks,
             'concatenated_intermediate': concatenated_summary
         }
+
+    def _stage1_context_aware_map(self, chunk_texts: List[str]) -> List[str]:
+        """
+        SOTA Stage 1: Sequential Summarization with Context Injection.
+        Passes the previous summary forward via Pegasus ||| separator.
+        """
+        summaries = []
+        prev_summary = ""
+        
+        # Determine target length based on granularity
+        target_len = 256 if len(chunk_texts) < 10 else 150
+        
+        iterable = tqdm(chunk_texts, desc="Context-Aware Summarization") if len(chunk_texts) > 2 else chunk_texts
+        
+        for text in iterable:
+            if prev_summary:
+                # Native Pegasus Multi-Document Context Injection
+                prompt = f"{prev_summary} ||| {text}"
+            else:
+                prompt = text
+                
+            # Generate 1 by 1 for maximum coherence
+            summary = self._generate([prompt], max_length=target_len, min_length=32)[0]
+            
+            summaries.append(summary)
+            prev_summary = summary 
+            
+        return summaries
 
     def _stage1_map_summaries(self, chunk_texts: List[str]) -> List[str]:
         """
@@ -177,7 +206,7 @@ class HierarchicalSummarizer:
             
         return chunk_summaries
 
-    def _stage2_reduce_summaries(self, chunk_summaries: List[str]) -> Tuple[str, str]:
+    def _stage2_reduce_summaries(self, chunk_summaries: List[str]) -> (str, str):
         """
         Stage 2 (Reduce): Recursively summarize chunk summaries until they fit valid context.
         

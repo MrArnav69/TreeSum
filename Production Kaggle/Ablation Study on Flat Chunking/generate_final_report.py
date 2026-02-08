@@ -42,7 +42,8 @@ def get_result_dirs():
         'results_flat_overlap', 
         'results_flat_1024', 
         'Overlap 1024', 
-        'Flat 1024'
+        'Flat 1024',
+        'Flat 1024 Overlap'
     ]
     
     found = []

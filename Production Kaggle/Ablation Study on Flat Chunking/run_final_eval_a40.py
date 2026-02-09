@@ -112,6 +112,7 @@ print(f"Using device: {DEVICE}")
 class AdvancedEvaluator:
     def __init__(self):
         print("Loading SummaC model...")
+        # SummaCConv internally batches sentence-level NLI
         self.summac_model = SummaCConv(models=["vitaminc"], bins='percentile', granularity="sentence", device=DEVICE)
         
         print("Loading UniEval model (MingZhong/UniEval-summarization)...")
@@ -122,32 +123,34 @@ class AdvancedEvaluator:
         self.pos_id = 4273
         self.neg_id = 150
 
-    def score_summac(self, source: str, summary: str) -> float:
-        if not summary.strip(): return 0.0
+    def score_summac_batch(self, sources: List[str], summaries: List[str]) -> List[float]:
+        """Compute SummaC consistency scores for a list of pairs."""
+        if not summaries: return []
         try:
-            res = self.summac_model.score([source], [summary])
-            return float(res["scores"][0])
+            # SummaC's score() takes two lists of the same length
+            res = self.summac_model.score(sources, summaries)
+            return [float(s) for s in res["scores"]]
         except Exception as e:
-            print(f"SummaC Error: {e}")
-            return 0.0
+            print(f"SummaC Batch Error: {e}")
+            return [0.0] * len(summaries)
 
     def score_unieval_batch(self, pairs: List[Dict[str, str]], dimensions: List[str]) -> List[Dict[str, float]]:
         """Compute UniEval scores in batches for efficiency."""
         all_results = [{} for _ in range(len(pairs))]
         
         for dim in dimensions:
+            # UniEval prompt format: question: [dim] content: [source] summary: [summary]
             prompts = [f"question: {dim} content: {p['source'][:2000]} summary: {p['summary']}" for p in pairs]
             
-            # Simple batching can be added here if needed, but for 1000 samples, 
-            # we'll process dimensions one by one for clarity.
+            # Use a smaller sub-batching inside if the list is too long, but A40 handles 100 easily.
             inputs = self.unieval_tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, max_length=1024).to(DEVICE)
             
             with torch.no_grad():
-                # We use internal T5 structure for UniEval scoring
+                # T5 decoder_input_ids=[0] forces the model to predict the first token (the answer)
                 outputs = self.unieval_model(**inputs, decoder_input_ids=torch.zeros((len(pairs), 1), dtype=torch.long).to(DEVICE))
                 logits = outputs.logits[:, 0, :] # [Batch, Vocab]
                 
-                # Softmax over Yes/No IDs
+                # Extract probabilities for 'Yes' and 'No'
                 relevant_logits = logits[:, [self.pos_id, self.neg_id]]
                 probs = torch.softmax(relevant_logits, dim=-1)
                 yes_probs = probs[:, 0].cpu().tolist()
@@ -170,39 +173,49 @@ def main():
     results = []
     
     # Process in batches for UniEval/SummaC efficiency
-    # For A40, we can use a decent batch size
-    BATCH_SIZE = 16 
+    # For A40 (48GB), 32 is a very safe and efficient batch size. 
+    # Since each sample has 3 summaries, this means 96 summaries per GPU pass.
+    BATCH_SIZE = 32 
     
-    print("\nStarting Advanced Evaluation...")
+    print(f"\nStarting Advanced Evaluation (Batch Size: {BATCH_SIZE}, Device: {DEVICE})...")
     for i in tqdm(range(0, len(aligned_data), BATCH_SIZE), desc="Overall Progress"):
         batch = aligned_data[i : i + BATCH_SIZE]
         
-        for item in batch:
-            res_item = {"sample_id": item["sample_id"]}
+        # 1. Prepare flat lists for batch inference
+        batch_sources = []
+        batch_summaries = []
+        batch_mapping = [] # List of (method_name, original_index)
+        
+        for idx, item in enumerate(batch):
             source = item["document"]
-            
-            # Evaluate each method
-            methods = ["treesum", "flat_1024", "flat_overlap"]
-            
-            for m in methods:
+            for m in ["treesum", "flat_1024", "flat_overlap"]:
                 summary = item[f"summary_{m}"]
-                
-                # 1. SummaC
-                s_score = evaluator.score_summac(source, summary)
-                res_item[f"{m}_summac"] = s_score
-                
-                # 2. UniEval (Individual for now, batching UniEval is complex due to different sources)
-                # But since the source is the same for all methods in one row, we can batch those 3!
-                pairs = [{"source": source, "summary": summary}]
-                u_scores = evaluator.score_unieval_batch(pairs, ["coherence", "consistency", "fluency", "relevance"])[0]
-                
-                for dim, score in u_scores.items():
-                    res_item[f"{m}_unieval_{dim}"] = score
-            
-            results.append(res_item)
+                batch_sources.append(source)
+                batch_summaries.append(summary)
+                batch_mapping.append((m, idx))
+        
+        # 2. Batch SummaC Scoring
+        batch_summac_scores = evaluator.score_summac_batch(batch_sources, batch_summaries)
+        
+        # 3. Batch UniEval Scoring
+        uni_pairs = [{"source": s, "summary": sum_} for s, sum_ in zip(batch_sources, batch_summaries)]
+        batch_uni_scores = evaluator.score_unieval_batch(uni_pairs, ["coherence", "consistency", "fluency", "relevance"])
+        
+        # 4. Map results back to aligned_data structures
+        batch_res_items = [{"sample_id": item["sample_id"]} for item in batch]
+        
+        for k, (m, batch_idx) in enumerate(batch_mapping):
+            res_idx = batch_idx
+            # SummaC
+            batch_res_items[res_idx][f"{m}_summac"] = batch_summac_scores[k]
+            # UniEval
+            for dim, score in batch_uni_scores[k].items():
+                batch_res_items[res_idx][f"{m}_unieval_{dim}"] = score
+        
+        results.extend(batch_res_items)
 
-        # Save checkpoint every 10 batches
-        if i % (BATCH_SIZE * 10) == 0:
+        # Save checkpoint periodically
+        if i % (BATCH_SIZE * 5) == 0:
             pd.DataFrame(results).to_csv("advanced_eval_checkpoint.csv", index=False)
 
     # Save Final Report

@@ -1,0 +1,9 @@
+{
+  "num_samples": 1000,
+  "alpha_values": [
+    1.0
+  ],
+  "device": "cuda",
+  "total_time_seconds": 14619.522517442703,
+  "time_per_sample_avg": 14.619522517442704
+}

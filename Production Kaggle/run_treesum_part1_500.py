@@ -110,12 +110,12 @@ DTYPE = torch.float32
 
 # Portability Fix: Use script directory instead of hardcoded /kaggle/working
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, 'results', 'treesum_production_results')
+OUTPUT_DIR = '/kaggle/working/treesum_part1_results'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Batch sizes: A40 has 48GB VRAM (Significant increase over P100)
-GEN_BATCH_SIZE = 32
-BERT_BATCH_SIZE = 64
+GEN_BATCH_SIZE = 2
+BERT_BATCH_SIZE = 4
 CHECKPOINT_INTERVAL = 50 # Save every 50 samples
 
 logger.info(f"A40 Optimization: {NUM_SAMPLES} samples, Precision: {DTYPE}, Gen Batch: {GEN_BATCH_SIZE}, BERT Batch: {BERT_BATCH_SIZE}")
@@ -2097,6 +2097,9 @@ def prepare_data():
     # Deterministic selection matching Flat baselines
     random.seed(SEED)
     indices = random.sample(range(len(dataset)), NUM_SAMPLES)
+    
+    # Partitioning: part1 (0 - 500)
+    indices = indices[0:500]
     selected_samples = []
     
     for idx in indices:

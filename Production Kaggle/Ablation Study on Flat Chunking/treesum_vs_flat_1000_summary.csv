@@ -1,4 +1,0 @@
-Method,ROUGE-1,ROUGE-2,ROUGE-L,BERTScore-F1
-TreeSum (Alpha=1.0),45.96,16.78,22.65,64.24
-Flat 1024 (No Overlap),45.56,17.76,23.22,65.04
-Flat 1024 (128 Overlap),45.59,17.86,23.29,65.09

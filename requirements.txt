@@ -13,3 +13,8 @@ nltk
 sentence-transformers
 scipy
 psutil
+scikit-learn
+matplotlib
+seaborn
+spacy
+requests

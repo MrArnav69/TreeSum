@@ -1,4 +1,0 @@
-Dataset,doc2sum_mean,doc2sum_std,doc2sum_min,doc2sum_max,doc2sum_median,sum2doc_mean,sum2doc_std,sum2doc_min,sum2doc_max,sum2doc_median
-flat_1024,-2.9023,0.4119,-4.7095,-1.4635,-2.8973,-3.584,0.7244,-6.3842,-1.1863,-3.5748
-flat_overlap,-2.9075,0.4152,-4.2802,-1.4635,-2.8924,-3.6011,0.7273,-6.419,-1.1335,-3.6152
-treesum,-2.8937,0.4046,-4.3847,-1.179,-2.8863,-3.6215,0.7088,-6.4062,-1.1067,-3.6212

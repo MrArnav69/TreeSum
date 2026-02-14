@@ -15,7 +15,7 @@ class HierarchicalSummarizer:
                  model_name: str = "google/pegasus-multi_news",
                  device: Optional[str] = None,
                  batch_size: int = 4,
-                 semantic_weight: float = 0.7,
+                 semantic_weight: float = 1.0,
                  dtype: Optional[torch.dtype] = None,
                  chunker: Optional[SemanticDocumentChunker] = None):
         if device is None:

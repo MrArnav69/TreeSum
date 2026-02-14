@@ -28,6 +28,7 @@ class ChunkingConfig:
     semantic_similarity_threshold: float = 0.7
     adaptive_overlap: bool = True
     overlap_tolerance: float = 0.2
+    semantic_weight: float = 1.0
 
 @dataclass
 class ChunkMetadata:
@@ -784,6 +785,7 @@ class SemanticDocumentChunker:
             'use_semantic_coherence': self.use_semantic_coherence,
             'semantic_similarity_threshold': self.semantic_similarity_threshold,
             'adaptive_overlap': self.adaptive_overlap,
+            'semantic_weight': self.semantic_weight,
             'validate_chunks': self.enable_validation,
             'validate_overlap_tokens': self.validate_overlap_tokens,
             'validate_semantic_coherence': self.validate_semantic_coherence,
@@ -809,6 +811,7 @@ class SemanticDocumentChunker:
             use_semantic_coherence=config['use_semantic_coherence'],
             semantic_similarity_threshold=config['semantic_similarity_threshold'],
             adaptive_overlap=config['adaptive_overlap'],
+            semantic_weight=config.get('semantic_weight', 1.0),
             enable_validation=config.get('validate_chunks', True),
             validate_overlap_tokens=config.get('validate_overlap_tokens', True),
             validate_semantic_coherence=config.get('validate_semantic_coherence', True)

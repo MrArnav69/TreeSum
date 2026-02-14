@@ -1,3 +1,127 @@
+"""
+Hierarchical Summarization Alpha Sweep Experiment - Kaggle P100 GPU Version
+============================================================================
+Research Paper Experiment: Semantic Weight (Alpha) Ablation Study
+- 100 samples from Multi-News dataset
+- 11 alpha values: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+- ROUGE evaluation metrics
+- GPU-accelerated (P100)
+
+Complete production code with ALL functions preserved for reproducibility.
+
+Author: Research Experiment
+Date: 2026-02-02
+"""
+
+# ============================================================================
+# SECTION 1: AUTOMATIC DEPENDENCY INSTALLATION
+# ============================================================================
+
+print("="*80)
+print("INSTALLING DEPENDENCIES")
+print("="*80)
+
+import subprocess
+import sys
+
+def install_package(package):
+    """Install package if not already installed."""
+    try:
+        __import__(package.split('[')[0].replace('-', '_'))
+        print(f"✅ {package} already installed")
+    except ImportError:
+        print(f"📦 Installing {package}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", package])
+        print(f"✅ {package} installed")
+
+# Core dependencies
+dependencies = [
+    'transformers',
+    'sentence-transformers',
+    'datasets',
+    'evaluate',
+    'rouge-score',
+    'bert-score',  # For BERTScore evaluation
+    'nltk',
+    'scipy',
+    'psutil',
+    'tqdm'
+]
+
+for dep in dependencies:
+    install_package(dep)
+
+print("\n✅ All dependencies installed!\n")
+
+# ============================================================================
+# SECTION 2: IMPORTS
+# ============================================================================
+
+import os
+import json
+import torch
+import pandas as pd
+import numpy as np
+import random
+from tqdm import tqdm
+import logging
+from typing import List, Dict, Optional, Union, Any, Tuple
+import time
+import warnings
+from dataclasses import dataclass, field
+from collections import defaultdict
+
+# Transformers & Evaluation
+from transformers import PegasusForConditionalGeneration, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+from datasets import load_dataset
+import evaluate
+
+# NLTK setup
+import nltk
+from nltk.tokenize import sent_tokenize
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    print("Downloading NLTK punkt tokenizer...")
+    nltk.download('punkt', quiet=True)
+
+# Scipy
+from scipy.signal import argrelextrema
+from scipy.ndimage import gaussian_filter1d
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# SECTION 3: CONFIGURATION
+# ============================================================================
+
+# Experiment Configuration (A40 Optimized)
+NUM_SAMPLES = 1000
+SEED = 42
+ALPHA_VALUES = [1.0] # TreeSum Ablation point
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# Strict float32 precision as requested
+DTYPE = torch.float32
+
+# Portability Fix: Use script directory instead of hardcoded /kaggle/working
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = '/kaggle/working/treesum_part1_results'
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Batch sizes: A40 has 48GB VRAM (Significant increase over P100)
+GEN_BATCH_SIZE = 2
+BERT_BATCH_SIZE = 4
+CHECKPOINT_INTERVAL = 50 # Save every 50 samples
+
+logger.info(f"A40 Optimization: {NUM_SAMPLES} samples, Precision: {DTYPE}, Gen Batch: {GEN_BATCH_SIZE}, BERT Batch: {BERT_BATCH_SIZE}")
+logger.info(f"Results will be saved to: {OUTPUT_DIR}")
+
+# ============================================================================
 # SECTION 4: SEMANTIC DOCUMENT CHUNKER (COMPLETE 1726 LINES - NO MODIFICATIONS)
 # ============================================================================
 
@@ -614,6 +738,108 @@ class SemanticDocumentChunker:
         """
         return current_tokens >= self.min_chunk_tokens or num_chunks == 0
     
+    def chunk_with_sentence_boundaries(self, 
+                                       sentences: List[str], 
+                                       article_idx: int,
+                                       previous_chunk_sentences: Optional[List[str]] = None,
+                                       original_token_start: int = 0) -> Tuple[List[Dict], int]:
+        """
+        Create chunks that respect sentence boundaries with semantic awareness.
+        
+        Modularized implementation using helper methods for clarity.
+        
+        Args:
+            sentences: List of sentences to chunk
+            article_idx: Index of source article
+            previous_chunk_sentences: Sentences from previous chunk for overlap
+            original_token_start: Starting token offset in original document
+            
+        Returns:
+            Tuple of (list of chunk dictionaries, next_token_offset)
+        """
+        chunks = []
+        current_sentences = []
+        current_tokens = 0
+        overlap_sentences = []
+        
+        # Initialize overlap from previous chunk if exists
+        if previous_chunk_sentences:
+            overlap_sentences = self.find_optimal_overlap_sentences(
+                previous_chunk_sentences, 
+                self.overlap_tokens
+            )
+            current_sentences.extend(overlap_sentences)
+            current_tokens = sum(self.get_token_count(s) for s in overlap_sentences)
+        
+        token_offset = original_token_start
+        
+        # Process each sentence
+        for sent in sentences:
+            sent_tokens = self.get_token_count(sent)
+            
+            # Check if adding sentence would exceed max_tokens
+            if current_tokens + sent_tokens > self.max_tokens:
+                # Create chunk if it meets minimum size
+                if self._should_create_chunk(current_tokens, len(chunks)):
+                    coherence_score, coherence_dict = self._compute_chunk_coherence(current_sentences)
+                    
+                    chunk = self._create_chunk_dict(
+                        chunk_id=len(chunks),
+                        sentences=current_sentences,
+                        token_count=current_tokens,
+                        article_idx=article_idx,
+                        has_overlap=len(chunks) > 0 or previous_chunk_sentences is not None,
+                        overlap_token_count=sum(self.get_token_count(s) for s in overlap_sentences) if previous_chunk_sentences else 0,
+                        token_start=token_offset - current_tokens,
+                        token_end=token_offset,
+                        coherence_score=coherence_score,
+                        coherence_dict=coherence_dict
+                    )
+                    chunks.append(chunk)
+                    
+                    # Start new chunk with overlap
+                    overlap_sentences = self.find_optimal_overlap_sentences(
+                        current_sentences,
+                        self.overlap_tokens
+                    )
+                    current_sentences = overlap_sentences + [sent]
+                    current_tokens = sum(self.get_token_count(s) for s in current_sentences)
+                    token_offset += sent_tokens
+                else:
+                    # Chunk too small, add sentence anyway
+                    current_sentences.append(sent)
+                    current_tokens += sent_tokens
+                    token_offset += sent_tokens
+            else:
+                # Add sentence to current chunk
+                current_sentences.append(sent)
+                current_tokens += sent_tokens
+                token_offset += sent_tokens
+        
+        # Add final chunk if exists
+        if current_sentences and self._should_create_chunk(current_tokens, len(chunks)):
+            coherence_score, coherence_dict = self._compute_chunk_coherence(current_sentences)
+            
+            overlap_count = sum(self.get_token_count(s) for s in overlap_sentences) if (len(chunks) > 0 or previous_chunk_sentences) else 0
+            
+            chunk = self._create_chunk_dict(
+                chunk_id=len(chunks),
+                sentences=current_sentences,
+                token_count=current_tokens,
+                article_idx=article_idx,
+                has_overlap=len(chunks) > 0 or previous_chunk_sentences is not None,
+                overlap_token_count=overlap_count,
+                token_start=token_offset - current_tokens,
+                token_end=token_offset,
+                coherence_score=coherence_score,
+                coherence_dict=coherence_dict
+            )
+            chunks.append(chunk)
+        
+        return chunks, token_offset
+
+        return chunks, token_offset
+
     def _compute_lexical_similarity(self, sent1: str, sent2: str) -> float:
         """Compute Jaccard similarity between two sentences (Lexical Signal)."""
         tokens1 = set(self.tokenizer.tokenize(sent1.lower()))
@@ -1625,3 +1851,500 @@ class SemanticDocumentChunker:
             return None
         else:
             return fig
+# ============================================================================
+# SECTION 5: HIERARCHICAL SUMMARIZER (EXACT COPY - NO MODIFICATIONS)
+# ============================================================================
+
+class HierarchicalSummarizer:
+    """
+    EXACT COPY from hierarchical_summarizer.py
+    DO NOT MODIFY - Required for research reproducibility
+    """
+    
+    def __init__(self, 
+                 model_name: str = "google/pegasus-multi_news",
+                 device: Optional[str] = None,
+                 batch_size: int = 4,
+                 semantic_weight: float = 0.7,
+                 dtype: Optional[torch.dtype] = None,
+                 chunker: Optional[SemanticDocumentChunker] = None):
+        """
+        Initialize the summarizer.
+        
+        Args:
+            model_name: HuggingFace model hub ID.
+            device: 'cuda', 'mps', or 'cpu'. Auto-detected if None.
+            batch_size: Batch size for chunk summarization.
+            dtype: torch.dtype (e.g. torch.bfloat16). Defaults to precision appropriate for device.
+            chunker: Pre-initialized chunker instance.
+        """
+        # 1. Device Selection
+        if device is None:
+            if torch.cuda.is_available():
+                self.device = 'cuda'
+            elif torch.backends.mps.is_available():
+                self.device = 'mps'
+            else:
+                self.device = 'cpu'
+        else:
+            self.device = device
+            
+        logger.info(f"Initializing HierarchicalSummarizer on {self.device}")
+        
+        # 2. Dtype Selection
+        self.dtype = DTYPE
+
+        # 3. Load Model & Tokenizer
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+            self.model = PegasusForConditionalGeneration.from_pretrained(
+                model_name, 
+                torch_dtype=self.dtype
+            ).to(self.device)
+        except Exception as e:
+            logger.error(f"Failed to load model {model_name}: {e}")
+            raise
+                
+        self.batch_size = batch_size
+        
+        # 3. Initialize Chunker (SOTA configuration)
+        if chunker:
+            self.chunker = chunker
+        else:
+            self.chunker = SemanticDocumentChunker(
+                tokenizer=self.tokenizer,
+                max_tokens=1000,
+                overlap_tokens=128,
+                use_semantic_coherence=True,
+                adaptive_overlap=True,
+                semantic_weight=semantic_weight
+            )
+            
+    def _generate(self, inputs: List[str], max_length: int = 512, min_length: int = 64) -> List[str]:
+        """
+        Low-level generation with researched beam search parameters.
+        """
+        # Tokenize (Batch)
+        batch = self.tokenizer(
+            inputs, 
+            truncation=True, 
+            padding="longest", 
+            max_length=1024, 
+            return_tensors="pt"
+        ).to(self.device)
+        
+        try:
+            with torch.no_grad():
+                summary_ids = self.model.generate(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    num_beams=8, 
+                    max_length=max_length,
+                    min_length=min_length,
+                    length_penalty=0.8, 
+                    no_repeat_ngram_size=3,
+                    early_stopping=True
+                )
+            
+            # Decode
+            summaries = self.tokenizer.batch_decode(summary_ids, skip_special_tokens=True)
+            return summaries
+            
+        except Exception as e:
+            logger.error(f"Generation failed: {e}")
+            return [""] * len(inputs)
+
+    def summarize_document(self, document: str) -> Dict[str, Union[str, List[str]]]:
+        """
+        Execute the full hierarchical pipeline on a raw document.
+        
+        Returns:
+            Dict containing:
+            - 'final_summary': The resulting summary
+            - 'chunk_summaries': Intermediate summaries (for analysis)
+            - 'chunks': Raw chunks
+        """
+        if not document.strip():
+            return {'final_summary': "", 'chunk_summaries': [], 'chunks': []}
+            
+        # Stage 1: Segmentation (SOTA Hybrid)
+        chunks = self.chunker.chunk_document(document)
+        chunk_texts = [c['text'] for c in chunks]
+        
+        if not chunk_texts:
+            return {'final_summary': "", 'chunk_summaries': [], 'chunks': []}
+            
+        # Stage 2: Map (Chunk Summarization)
+        chunk_summaries = self._stage1_map_summaries(chunk_texts)
+            
+        # Stage 3: Reduce (Aggregation & Final Summarization)
+        final_summary, concatenated_summary = self._stage2_reduce_summaries(chunk_summaries)
+            
+        return {
+            'final_summary': final_summary,
+            'chunk_summaries': chunk_summaries,
+            'chunks': chunks,
+            'concatenated_intermediate': concatenated_summary
+        }
+
+    def _stage1_map_summaries(self, chunk_texts: List[str]) -> List[str]:
+        """
+        Stage 1 (Map): Summarize each chunk independently.
+        """
+        chunk_summaries = []
+        
+        # Determine strictness based on chunk count
+        local_max_len = 128 if len(chunk_texts) > 5 else 256
+        
+        for i in range(0, len(chunk_texts), self.batch_size):
+            batch = chunk_texts[i : i + self.batch_size]
+            summaries = self._generate(batch, max_length=local_max_len)
+            chunk_summaries.extend(summaries)
+            
+        return chunk_summaries
+
+    def _stage2_reduce_summaries(self, chunk_summaries: List[str]) -> tuple:
+        """
+        Stage 2 (Reduce): Recursively summarize chunk summaries until they fit valid context.
+        """
+        # 1. Initial Concatenation (for logging/debug)
+        concatenated_intermediate = " ".join(chunk_summaries)
+        
+        current_summaries = chunk_summaries
+        layer = 0
+        
+        MAX_INPUT_TOKENS = 1000 
+        
+        while True:
+            # Check length of concatenated current level
+            combined_text = " ".join(current_summaries)
+            tokenized_len = len(self.tokenizer.encode(combined_text, truncation=False))
+            
+            logger.info(f"Reduction Layer {layer}: {len(current_summaries)} chunks, {tokenized_len} tokens")
+            
+            # Base Case: If it fits, generate final summary
+            if tokenized_len <= MAX_INPUT_TOKENS:
+                # If it's very short, just return it
+                if tokenized_len < 256 and layer > 0:
+                    return combined_text, concatenated_intermediate
+                
+                # Final Pass
+                final_summary_list = self._generate(
+                    [combined_text], 
+                    max_length=512, 
+                    min_length=128
+                )
+                return final_summary_list[0], concatenated_intermediate
+            
+            # Recursive Step
+            if len(current_summaries) <= 1:
+                final_summary_list = self._generate(
+                    [current_summaries[0]], 
+                    max_length=512, 
+                    min_length=128
+                )
+                return final_summary_list[0], concatenated_intermediate
+                
+            # Smart Grouping (Bin Packing)
+            new_level_summaries = []
+            current_group = []
+            current_group_len = 0
+            
+            for summary in current_summaries:
+                s_len = len(self.tokenizer.encode(summary, truncation=False))
+                
+                if current_group_len + s_len > MAX_INPUT_TOKENS:
+                    if current_group:
+                        group_text = " ".join(current_group)
+                        new_summary = self._generate([group_text], max_length=256)[0]
+                        new_level_summaries.append(new_summary)
+                    
+                    current_group = [summary]
+                    current_group_len = s_len
+                else:
+                    current_group.append(summary)
+                    current_group_len += s_len
+            
+            # Process final group
+            if current_group:
+                group_text = " ".join(current_group)
+                new_summary = self._generate([group_text], max_length=256)[0]
+                new_level_summaries.append(new_summary)
+            
+            current_summaries = new_level_summaries
+            layer += 1
+            
+            # Safety break
+            if layer > 5:
+                logger.warning("Max reduction layers reached. Truncating.")
+                final_text = " ".join(current_summaries)
+                final_summary_list = self._generate([final_text], max_length=512)
+                return final_summary_list[0], concatenated_intermediate
+
+
+# ============================================================================
+# SECTION 6: DATA PREPARATION (EXACT LOGIC - NO MODIFICATIONS)
+# ============================================================================
+
+def prepare_data():
+    """
+    EXACT COPY from your original prepare_data function (Modified for Index Alignment)
+    Load Multi-News dataset with deterministic sampling using Python random.sample
+    """
+    print(f"Loading Multi-News dataset (Seed: {SEED})...")
+    dataset = load_dataset("Awesome075/multi_news_parquet", split="test")
+    
+    # Deterministic selection matching Flat baselines
+    random.seed(SEED)
+    indices = random.sample(range(len(dataset)), NUM_SAMPLES)
+    
+    # Partitioning: part1 (0 - 500)
+    indices = indices[0:500]
+    selected_samples = []
+    
+    for idx in indices:
+        item = dataset[int(idx)]
+        selected_samples.append({
+            'id': int(idx),
+            'document': item['document'],
+            'summary': item['summary']
+        })
+    
+    logger.info(f"Selected {len(selected_samples)} samples from Multi-News dataset using random.sample")
+    return selected_samples
+
+
+# ============================================================================
+# SECTION 7: EXPERIMENT RUNNER
+# ============================================================================
+
+def run_alpha_sweep():
+    """
+    Main experiment loop - extended to 11 alpha values and 100 samples
+    Evaluates with both ROUGE and BERTScore metrics
+    """
+    # 1. Load Data
+    print("\n" + "="*80)
+    print("STARTING ALPHA SWEEP EXPERIMENT")
+    print("="*80)
+    samples = prepare_data()
+    
+    # 2. Initialize evaluators
+    print("\nInitializing evaluation metrics...")
+    rouge = evaluate.load('rouge')
+    bertscore = evaluate.load('bertscore')
+    print("✅ ROUGE and BERTScore loaded")
+    
+    results_table = {}
+    bertscore_results = {}
+    
+    # 3. Run experiment for each alpha value
+    for alpha in ALPHA_VALUES:
+        print(f"\n{'='*80}")
+        print(f"🚀 Testing Alpha = {alpha:.1f} (Semantic Weight)")
+        print(f"{'='*80}")
+        
+        # Initialize summarizer with specific alpha
+        summarizer = HierarchicalSummarizer(
+            device=DEVICE, 
+            semantic_weight=alpha,
+            batch_size=GEN_BATCH_SIZE  # Optimized for A40
+        )
+        
+        predictions = []
+        references = []
+        
+        # Checkpoint logic: Try to resume
+        checkpoint_path = os.path.join(OUTPUT_DIR, f"checkpoint_alpha_{alpha:.1f}.json")
+        processed_ids = set()
+        
+        if os.path.exists(checkpoint_path):
+            try:
+                with open(checkpoint_path, 'r') as f:
+                    checkpoint_data = json.load(f)
+                    predictions = [item['generated_summary'] for item in checkpoint_data]
+                    references = [item['reference_summary'] for item in checkpoint_data]
+                    processed_ids = {item['sample_id'] for item in checkpoint_data}
+                    print(f"🔄 Resuming from checkpoint: {len(processed_ids)} samples finished.")
+            except Exception as e:
+                print(f"⚠️ Error loading checkpoint, starting fresh: {e}")
+                predictions = []
+                references = []
+                processed_ids = set()
+
+        # 1. Process all samples with progress bar
+        for item in tqdm(samples, desc=f"Alpha={alpha:.1f}"):
+            if item['id'] in processed_ids:
+                continue
+                
+            doc = item['document']
+            ref = item['summary']
+            
+            try:
+                # Full TreeSum (Recursive) strategy
+                res = summarizer.summarize_document(doc)
+                predictions.append(res['final_summary'])
+                references.append(ref)
+                processed_ids.add(item['id'])
+            except Exception as e:
+                logger.error(f"Error at Alpha={alpha}, Sample ID={item['id']}: {e}")
+                predictions.append("")
+                references.append(ref)
+                processed_ids.add(item['id'])
+
+            # Periodic Checkpoint
+            if len(predictions) % CHECKPOINT_INTERVAL == 0:
+                # Rebuild export list in correct order matching 'samples'
+                temp_export = []
+                # Find all samples that have been processed so far (in their original order)
+                finished_indices = [i for i, s in enumerate(samples) if s['id'] in processed_ids]
+                
+                for idx, f_idx in enumerate(finished_indices):
+                    temp_export.append({
+                        "sample_id": samples[f_idx]['id'],
+                        "generated_summary": predictions[idx],
+                        "reference_summary": references[idx]
+                    })
+                
+                with open(checkpoint_path, 'w') as f:
+                    json.dump(temp_export, f, indent=2)
+                logger.info(f"💾 Checkpoint saved: {len(predictions)} samples.")
+
+        # 2. Save final individual summaries for this alpha
+        summary_export = []
+        for i, item in enumerate(samples):
+            summary_export.append({
+                "sample_id": item['id'],
+                "alpha": alpha,
+                "document": item['document'][:500] + "...",  # Preview
+                "generated_summary": predictions[i],
+                "reference_summary": item['summary']
+            })
+        
+        summary_path = os.path.join(OUTPUT_DIR, f"summaries_alpha_{alpha:.1f}.json")
+        with open(summary_path, 'w') as f:
+            json.dump(summary_export, f, indent=2)
+        print(f"✅ Summaries saved to {summary_path}")
+        
+        # Clean up checkpoint after successful final save
+        if os.path.exists(checkpoint_path):
+            os.remove(checkpoint_path)
+            print(f"🧹 Checkpoint cleaned up.")
+
+        # 3. Truncate for BERTScore to prevent OverflowError on A40
+        # This keeps sequences within model_max_length limits
+        print(f"  Preparing sequences for BERTScore evaluation...")
+        def truncate_str(text, max_chars=4000): # Approx 1000 tokens
+            return text[:max_chars] if text else ""
+            
+        bs_predictions = [truncate_str(p) for p in predictions]
+        bs_references = [truncate_str(r) for r in references]
+
+        # 5. Compute ROUGE Scores
+        print(f"  Computing ROUGE for Alpha={alpha:.1f}...")
+        scores = rouge.compute(predictions=predictions, references=references, use_stemmer=True)
+        results_table[f"alpha_{alpha:.1f}"] = {k: v * 100 for k, v in scores.items()}
+        
+        # 6. Compute BERTScore
+        # Optimization: Only offload to CPU if we aren't on a powerful GPU like A40
+        gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0
+        if torch.cuda.is_available() and gpu_memory_gb < 20: 
+            print("  Low VRAM detected. Moving Pegasus to CPU to free GPU memory...")
+            summarizer.model.to('cpu')
+            torch.cuda.empty_cache()
+        
+        try:
+            # Compute BERTScore with optimized batch size for A40
+            print(f"  Computing BERTScore (this might take a few minutes)...")
+            bert_scores = bertscore.compute(
+                predictions=bs_predictions, 
+                references=bs_references, 
+                lang="en",
+                model_type="microsoft/deberta-xlarge-mnli", 
+                device=DEVICE,
+                batch_size=BERT_BATCH_SIZE
+            )
+            
+            # Average BERTScore metrics
+            bertscore_results[f"alpha_{alpha:.1f}"] = {
+                'bertscore_precision': np.mean(bert_scores['precision']) * 100,
+                'bertscore_recall': np.mean(bert_scores['recall']) * 100,
+                'bertscore_f1': np.mean(bert_scores['f1']) * 100
+            }
+        except Exception as e:
+            logger.error(f"❌ BERTScore failed: {e}")
+            # Fallback to zero so script continues
+            bertscore_results[f"alpha_{alpha:.1f}"] = {
+                'bertscore_precision': 0.0, 'bertscore_recall': 0.0, 'bertscore_f1': 0.0
+            }
+        
+        print(f"\nResults for Alpha={alpha:.1f}:")
+        print(f"  ROUGE-1: {results_table[f'alpha_{alpha:.1f}']['rouge1']:.2f}")
+        print(f"  ROUGE-2: {results_table[f'alpha_{alpha:.1f}']['rouge2']:.2f}")
+        print(f"  ROUGE-L: {results_table[f'alpha_{alpha:.1f}']['rougeL']:.2f}")
+        print(f"  BERTScore F1: {bertscore_results[f'alpha_{alpha:.1f}']['bertscore_f1']:.2f}")
+    
+    # 7. Save consolidated results
+    # Combine ROUGE and BERTScore into single DataFrame
+    rouge_df = pd.DataFrame(results_table).T
+    bertscore_df = pd.DataFrame(bertscore_results).T
+    
+    # Merge both metrics
+    combined_df = pd.concat([rouge_df, bertscore_df], axis=1)
+    
+    # Save combined results
+    results_path = os.path.join(OUTPUT_DIR, 'alpha_sweep_results.csv')
+    combined_df.to_csv(results_path)
+    
+    # Also save separate files for each metric type
+    rouge_df.to_csv(os.path.join(OUTPUT_DIR, 'rouge_results.csv'))
+    bertscore_df.to_csv(os.path.join(OUTPUT_DIR, 'bertscore_results.csv'))
+    
+    print(f"\n{'='*80}")
+    print("✅ EXPERIMENT COMPLETE!")
+    print(f"{'='*80}")
+    print(f"Results saved to: {results_path}")
+    print("\nFinal ROUGE Scores Summary:")
+    print(rouge_df[['rouge1', 'rouge2', 'rougeL']].to_string())
+    print("\nFinal BERTScore Summary:")
+    print(bertscore_df.to_string())
+    
+    return combined_df
+
+
+# ============================================================================
+# SECTION 8: MAIN EXECUTION
+# ============================================================================
+
+if __name__ == "__main__":
+    # Verify GPU availability
+    print(f"\n{'='*80}")
+    print("SYSTEM CONFIGURATION")
+    print(f"{'='*80}")
+    print(f"Device: {DEVICE}")
+    print(f"CUDA Available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    print(f"PyTorch Version: {torch.__version__}")
+    
+    # Run experiment
+    start_time = time.time()
+    results_df = run_alpha_sweep()
+    elapsed_time = time.time() - start_time
+    
+    print(f"\n{'='*80}")
+    print(f"Total Experiment Time: {elapsed_time/3600:.2f} hours ({elapsed_time/60:.1f} minutes)")
+    print(f"{'='*80}")
+    
+    # Save timing info
+    with open(os.path.join(OUTPUT_DIR, 'experiment_metadata.json'), 'w') as f:
+        json.dump({
+            'num_samples': NUM_SAMPLES,
+            'alpha_values': ALPHA_VALUES,
+            'device': DEVICE,
+            'total_time_seconds': elapsed_time,
+            'time_per_sample_avg': elapsed_time / (NUM_SAMPLES * len(ALPHA_VALUES))
+        }, f, indent=2)
+    
+    print(f"\n🎉 Experiment complete! Results are in {OUTPUT_DIR}")

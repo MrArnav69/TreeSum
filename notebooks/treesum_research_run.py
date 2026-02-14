@@ -59,6 +59,8 @@ np.random.seed(42)
 torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 nltk.download('punkt', quiet=True)
 
@@ -76,18 +78,11 @@ selected_indices = sorted(all_indices[:2500])
 
 print("initializing treesum (pure semantic, alpha=1.0)...")
 
-chunker = SemanticDocumentChunker(
-    semantic_weight=1.0,
-    min_chunk_tokens=256,
-    max_tokens=1024,
-    overlap_tokens=128
-)
-
 summarizer = HierarchicalSummarizer(
-    model_name="google/pegasus-multi_news",
-    chunker=chunker,
-    batch_size=32,
-    dtype=torch.float32
+    device='cuda' if torch.cuda.is_available() else 'cpu',
+    batch_size=128,
+    dtype=torch.float32,
+    semantic_weight=1.0
 )
 
 results = []
@@ -99,7 +94,7 @@ for i, idx in enumerate(tqdm(selected_indices)):
     doc = sample['document']
     
     try:
-        output = summarizer.summarize_document(doc, semantic_weight=1.0)
+        output = summarizer.summarize_document(doc)
         
         chunk_metadata = []
         if 'chunks' in output and output['chunks']:
@@ -118,7 +113,8 @@ for i, idx in enumerate(tqdm(selected_indices)):
             'generated_summary': output.get('final_summary', ""),
             'num_chunks': len(chunk_metadata),
             'chunk_metadata': chunk_metadata,
-            'concatenated_intermediate': output.get('concatenated_intermediate', "")
+            'concatenated_intermediate': output.get('concatenated_intermediate', ""),
+            'reduction_layers': output.get('reduction_layers', 0)
         }
         results.append(res)
         

@@ -1,0 +1,2 @@
+model,bartscore_doc2sum_mean,bartscore_doc2sum_std,bartscore_doc2sum_min,bartscore_doc2sum_max,bartscore_doc2sum_median,bartscore_sum2doc_mean,bartscore_sum2doc_std,bartscore_sum2doc_min,bartscore_sum2doc_max,bartscore_sum2doc_median
+PEGASUS,-1.3064021938800812,0.45948551380070896,-4.6135430335998535,-0.33818769454956055,-1.2491808533668518,-3.371275185251236,0.44504549247990194,-5.601293563842773,-1.6163731813430786,-3.368103504180908

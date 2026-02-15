@@ -1,0 +1,2 @@
+model,bartscore_doc2sum_mean,bartscore_doc2sum_std,bartscore_doc2sum_min,bartscore_doc2sum_max,bartscore_doc2sum_median,bartscore_sum2doc_mean,bartscore_sum2doc_std,bartscore_sum2doc_min,bartscore_sum2doc_max,bartscore_sum2doc_median
+TreeSum,-1.9018841079473496,0.6813492006160703,-4.767618656158447,-0.5345138907432556,-1.8009518384933472,-3.6189227783203126,0.4226104757270657,-5.6339006423950195,-1.9723308086395264,-3.613592028617859

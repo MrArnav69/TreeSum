@@ -1,0 +1,2 @@
+model,bartscore_doc2sum_mean,bartscore_doc2sum_std,bartscore_doc2sum_min,bartscore_doc2sum_max,bartscore_doc2sum_median,bartscore_sum2doc_mean,bartscore_sum2doc_std,bartscore_sum2doc_min,bartscore_sum2doc_max,bartscore_sum2doc_median
+PRIMERA,-1.6305476108193397,0.7293358246027157,-4.72463846206665,-0.3075349032878876,-1.4871519804000854,-3.6715519893169404,0.43654560757495336,-5.597809791564941,-1.213240385055542,-3.6848819255828857

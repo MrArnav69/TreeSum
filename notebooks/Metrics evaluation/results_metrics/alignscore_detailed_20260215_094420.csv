@@ -1,0 +1,5 @@
+sample_id,PRIMERA_alignscore,PEGASUS_alignscore,BART_alignscore,TreeSum_alignscore
+0,0.7151520252227783,,,
+0,,0.6313499212265015,,
+0,,,0.9774714708328247,
+0,,,,0.539646565914154

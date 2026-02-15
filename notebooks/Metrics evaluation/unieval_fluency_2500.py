@@ -10,8 +10,12 @@ from datetime import datetime
 import torch
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../Ablation Studies/Architectural Ablation: Hierarchical vs. Linear Processing/Evaluation of Advanced Metrics/UniEval'))
-from UniEval.utils import convert_to_json
-from UniEval.metric.evaluator import get_evaluator
+try:
+    from utils import convert_to_json
+    from metric.evaluator import SumEvaluator
+except ImportError as e:
+    print(f"⚠️ UniEval import error: {e}")
+    print("Ensure UniEval folder exists and has proper structure.")
 
 results_dir = Path("results_metrics")
 results_dir.mkdir(exist_ok=True)
@@ -71,23 +75,28 @@ def evaluate_fluency(samples, model_name):
     print(f"Evaluating fluency for {model_name}...")
     
     # Prepare data for UniEval
-    data_list = []
+    src_list = []
+    output_list = []
+    ref_list = []
+    
     for sample in samples:
-        data_list.append({
-            'src': sample[model_name]['document'],
-            'hyp': sample[model_name]['generated_summary']
-        })
+        src_list.append(sample[model_name]['document'])
+        output_list.append(sample[model_name]['generated_summary'])
+        ref_list.append(sample[model_name]['reference_summary'])
     
     # Convert to UniEval format
-    eval_data = convert_to_json(data_list, task='sum', ref_key=None)
+    eval_data = convert_to_json(output_list=output_list, src_list=src_list, ref_list=ref_list)
     
     # Get evaluator
-    evaluator = get_evaluator(task='sum', metrics=['fluency'])
+    evaluator = SumEvaluator(device='cuda', max_length=1024)
     
-    # Evaluate
-    scores = evaluator.evaluate(eval_data, print_result=False)
+    # Evaluate only fluency dimension
+    scores_list = evaluator.evaluate(eval_data, dims=['fluency'], print_result=False)
     
-    return scores
+    # Extract fluency scores (returns list of dicts)
+    fluency_scores = [score['fluency'] for score in scores_list]
+    
+    return fluency_scores
 
 def main():
     print("=== UniEval Fluency Evaluation for 2500 samples ===")
@@ -109,57 +118,52 @@ def main():
     # Create matched samples
     matched_samples = create_matched_samples(datasets)
     
-    # Evaluate each model
-    results = {}
-    detailed_results = []
-    
+    # Evaluate each model and save separate files
     models = ['PRIMERA', 'PEGASUS', 'BART', 'TreeSum']
     
     for model in models:
-        scores = evaluate_fluency(matched_samples, model)
-        results[model] = scores
+        print(f"\n=== Processing {model} ===")
         
-        # Add to detailed results
-        for i, sample in enumerate(matched_samples):
-            if i == 0:
-                detailed_results.append({
-                    'sample_id': sample['sample_id'],
-                    f'{model}_fluency': scores[i]
-                })
-            else:
-                detailed_results[-1][f'{model}_fluency'] = scores[i]
-    
-    # Calculate summary statistics
-    summary_data = []
-    for model in models:
-        model_scores = results[model]
-        summary_data.append({
+        scores = evaluate_fluency(matched_samples, model)
+        
+        # Create model-specific summary data
+        model_summary = [{
             'model': model,
-            'fluency_mean': np.mean(model_scores),
-            'fluency_std': np.std(model_scores),
-            'fluency_min': np.min(model_scores),
-            'fluency_max': np.max(model_scores),
-            'fluency_median': np.median(model_scores)
-        })
-    
-    # Save summary results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_df = pd.DataFrame(summary_data)
-    summary_df = summary_df.set_index('model')
-    summary_file = results_dir / f"unieval_fluency_summary_{timestamp}.csv"
-    summary_df.to_csv(summary_file)
-    print(f"✅ Summary saved to {summary_file}")
-    
-    # Save detailed results
-    detailed_df = pd.DataFrame(detailed_results)
-    detailed_df = detailed_df.set_index('sample_id')
-    detailed_file = results_dir / f"unieval_fluency_detailed_{timestamp}.csv"
-    detailed_df.to_csv(detailed_file)
-    print(f"✅ Detailed results saved to {detailed_file}")
-    
-    # Print summary
-    print("\n=== Fluency Summary ===")
-    print(summary_df)
+            'fluency_mean': np.mean(scores),
+            'fluency_std': np.std(scores),
+            'fluency_min': np.min(scores),
+            'fluency_max': np.max(scores),
+            'fluency_median': np.median(scores)
+        }]
+        
+        # Create model-specific detailed data
+        model_detailed = []
+        for i, sample in enumerate(matched_samples):
+            model_detailed.append({
+                'sample_id': sample['sample_id'],
+                'fluency': scores[i]
+            })
+        
+        # Save model-specific files with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save summary file for this model
+        summary_df = pd.DataFrame(model_summary)
+        summary_df = summary_df.set_index('model')
+        summary_file = results_dir / f"unieval_fluency_summary_{model}_{timestamp}.csv"
+        summary_df.to_csv(summary_file)
+        print(f"✅ {model} summary saved to {summary_file}")
+        
+        # Save detailed file for this model
+        detailed_df = pd.DataFrame(model_detailed)
+        detailed_df = detailed_df.set_index('sample_id')
+        detailed_file = results_dir / f"unieval_fluency_detailed_{model}_{timestamp}.csv"
+        detailed_df.to_csv(detailed_file)
+        print(f"✅ {model} detailed saved to {detailed_file}")
+        
+        # Print model summary
+        print(f"\n=== {model} Fluency Summary ===")
+        print(summary_df)
 
 if __name__ == "__main__":
     main()

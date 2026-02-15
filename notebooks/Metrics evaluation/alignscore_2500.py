@@ -11,11 +11,12 @@ import random
 from datasets import load_dataset
 import torch
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../Ablation Studies/Architectural Ablation: Hierarchical vs. Linear Processing/Evaluation of Advanced Metrics/AlignScore'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../Ablation Studies/Architectural Ablation: Hierarchical vs. Linear Processing/Evaluation of Advanced Metrics/AlignScore/src'))
 try:
     from alignscore import AlignScore
-except ImportError:
-    print("⚠️ AlignScore not found. Ensure 'AlignScore' folder exists.")
+except ImportError as e:
+    print(f"⚠️ AlignScore import error: {e}")
+    print("Ensure AlignScore folder exists and has proper structure.")
 
 results_dir = Path("results_metrics")
 results_dir.mkdir(exist_ok=True)
@@ -99,7 +100,7 @@ def main():
         print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
         print(f"GPU Name: {torch.cuda.get_device_name(0)}")
     
-    # Initialize AlignScore with A40 optimization (matching original config)
+    # Initialize AlignScore with A40 optimization
     try:
         alignscorer = AlignScore(
             model='roberta-large',
@@ -112,7 +113,13 @@ def main():
     except Exception as e:
         print(f"❌ AlignScore failed: {e}")
         # Fallback to base model
-        alignscorer = AlignScore(model='roberta-base', device=device, evaluation_mode='nli')
+        alignscorer = AlignScore(
+            model='roberta-base',
+            batch_size=32,
+            device=device,
+            ckpt_path='AlignScore-base.ckpt',
+            evaluation_mode='nli'
+        )
     
     # Load datasets
     datasets = find_datasets()

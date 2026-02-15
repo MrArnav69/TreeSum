@@ -113,70 +113,60 @@ def main():
     # Create matched samples
     matched_samples = create_matched_samples(datasets)
     
-    # Evaluate each model
-    results = {}
-    detailed_results = []
-    
+    # Evaluate each model and save separate files
     models = ['PRIMERA', 'PEGASUS', 'BART', 'TreeSum']
     
     for model in models:
-        # Evaluate both directions like the original
+        print(f"\n=== Processing {model} ===")
+        
+        # Evaluate both directions like original
         doc2sum_scores = evaluate_bartscore(matched_samples, model, scorer, "doc2sum")
         sum2doc_scores = evaluate_bartscore(matched_samples, model, scorer, "sum2doc")
         
-        results[model] = {
-            'doc2sum': doc2sum_scores,
-            'sum2doc': sum2doc_scores
-        }
-        
-        # Add to detailed results
-        for i, sample in enumerate(matched_samples):
-            if i == 0:
-                detailed_results.append({
-                    'sample_id': sample['sample_id'],
-                    f'{model}_bartscore_doc2sum': doc2sum_scores[i],
-                    f'{model}_bartscore_sum2doc': sum2doc_scores[i]
-                })
-            else:
-                detailed_results[-1][f'{model}_bartscore_doc2sum'] = doc2sum_scores[i]
-                detailed_results[-1][f'{model}_bartscore_sum2doc'] = sum2doc_scores[i]
-    
-    # Calculate summary statistics
-    summary_data = []
-    for model in models:
-        model_scores = results[model]
-        summary_data.append({
+        # Create model-specific summary data
+        model_summary = [{
             'model': model,
-            'bartscore_doc2sum_mean': np.mean(model_scores['doc2sum']),
-            'bartscore_doc2sum_std': np.std(model_scores['doc2sum']),
-            'bartscore_doc2sum_min': np.min(model_scores['doc2sum']),
-            'bartscore_doc2sum_max': np.max(model_scores['doc2sum']),
-            'bartscore_doc2sum_median': np.median(model_scores['doc2sum']),
-            'bartscore_sum2doc_mean': np.mean(model_scores['sum2doc']),
-            'bartscore_sum2doc_std': np.std(model_scores['sum2doc']),
-            'bartscore_sum2doc_min': np.min(model_scores['sum2doc']),
-            'bartscore_sum2doc_max': np.max(model_scores['sum2doc']),
-            'bartscore_sum2doc_median': np.median(model_scores['sum2doc'])
-        })
-    
-    # Save summary results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_df = pd.DataFrame(summary_data)
-    summary_df = summary_df.set_index('model')
-    summary_file = results_dir / f"bartscore_summary_{timestamp}.csv"
-    summary_df.to_csv(summary_file)
-    print(f"✅ Summary saved to {summary_file}")
-    
-    # Save detailed results
-    detailed_df = pd.DataFrame(detailed_results)
-    detailed_df = detailed_df.set_index('sample_id')
-    detailed_file = results_dir / f"bartscore_detailed_{timestamp}.csv"
-    detailed_df.to_csv(detailed_file)
-    print(f"✅ Detailed results saved to {detailed_file}")
-    
-    # Print summary
-    print("\n=== BARTScore Summary ===")
-    print(summary_df)
+            'bartscore_doc2sum_mean': np.mean(doc2sum_scores),
+            'bartscore_doc2sum_std': np.std(doc2sum_scores),
+            'bartscore_doc2sum_min': np.min(doc2sum_scores),
+            'bartscore_doc2sum_max': np.max(doc2sum_scores),
+            'bartscore_doc2sum_median': np.median(doc2sum_scores),
+            'bartscore_sum2doc_mean': np.mean(sum2doc_scores),
+            'bartscore_sum2doc_std': np.std(sum2doc_scores),
+            'bartscore_sum2doc_min': np.min(sum2doc_scores),
+            'bartscore_sum2doc_max': np.max(sum2doc_scores),
+            'bartscore_sum2doc_median': np.median(sum2doc_scores)
+        }]
+        
+        # Create model-specific detailed data
+        model_detailed = []
+        for i, sample in enumerate(matched_samples):
+            model_detailed.append({
+                'sample_id': sample['sample_id'],
+                'bartscore_doc2sum': doc2sum_scores[i],
+                'bartscore_sum2doc': sum2doc_scores[i]
+            })
+        
+        # Save model-specific files with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save summary file for this model
+        summary_df = pd.DataFrame(model_summary)
+        summary_df = summary_df.set_index('model')
+        summary_file = results_dir / f"bartscore_summary_{model}_{timestamp}.csv"
+        summary_df.to_csv(summary_file)
+        print(f"✅ {model} summary saved to {summary_file}")
+        
+        # Save detailed file for this model
+        detailed_df = pd.DataFrame(model_detailed)
+        detailed_df = detailed_df.set_index('sample_id')
+        detailed_file = results_dir / f"bartscore_detailed_{model}_{timestamp}.csv"
+        detailed_df.to_csv(detailed_file)
+        print(f"✅ {model} detailed saved to {detailed_file}")
+        
+        # Print model summary
+        print(f"\n=== {model} BARTScore Summary ===")
+        print(summary_df)
 
 if __name__ == "__main__":
     main()

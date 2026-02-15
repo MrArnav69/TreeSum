@@ -1,0 +1,6 @@
+model_name,model_type,precision_mean,recall_mean,f1_mean,precision_std,recall_std,f1_std,batch_size,truncate,max_length,success,error
+roberta-large,roberta-large,0.0,0.0,0.0,0.0,0.0,0.0,4,False,,False,score() got an unexpected keyword argument 'truncate'
+roberta-base,roberta-base,0.0,0.0,0.0,0.0,0.0,0.0,8,False,,False,score() got an unexpected keyword argument 'truncate'
+microsoft/deberta-large,microsoft/deberta-large,0.0,0.0,0.0,0.0,0.0,0.0,2,False,,False,score() got an unexpected keyword argument 'truncate'
+microsoft/deberta-base,microsoft/deberta-base,0.0,0.0,0.0,0.0,0.0,0.0,8,False,,False,score() got an unexpected keyword argument 'truncate'
+roberta-large-with-truncation,roberta-large,0.0,0.0,0.0,0.0,0.0,0.0,8,True,512.0,False,score() got an unexpected keyword argument 'truncate'

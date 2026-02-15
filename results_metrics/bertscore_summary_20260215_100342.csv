@@ -1,0 +1,5 @@
+model,n_samples,bertscore_precision_mean,bertscore_precision_std,bertscore_precision_median,bertscore_recall_mean,bertscore_recall_std,bertscore_recall_median,bertscore_f1_mean,bertscore_f1_std,bertscore_f1_median,bertscore_f1_min,bertscore_f1_max
+PRIMERA,0,0,0,0,0,0,0,0,0,0,0,0
+PEGASUS,0,0,0,0,0,0,0,0,0,0,0,0
+BART,0,0,0,0,0,0,0,0,0,0,0,0
+TreeSum,0,0,0,0,0,0,0,0,0,0,0,0

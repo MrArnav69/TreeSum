@@ -20,7 +20,8 @@ class HierarchicalSummarizer:
                  batch_size: int = 4,
                  semantic_weight: float = 1.0,
                  dtype: Optional[torch.dtype] = None,
-                 chunker: Optional[SemanticDocumentChunker] = None):
+                 chunker: Optional[SemanticDocumentChunker] = None,
+                 compile: bool = False):
         """
         Initialize the summarizer.
         
@@ -30,6 +31,7 @@ class HierarchicalSummarizer:
             batch_size: Batch size for chunk summarization.
             dtype: torch.dtype (e.g. torch.bfloat16). Defaults to precision appropriate for device.
             chunker: Pre-initialized chunker instance.
+            compile: Whether to use torch.compile() for speedup (Requires Torch 2.0+).
         """
         # 1. Device Selection
         if device is None:
@@ -58,6 +60,14 @@ class HierarchicalSummarizer:
                 torch_dtype=self.dtype
             ).to(self.device)
             # CRITICAL DIFFERENCE: NO model.eval() here in working script
+            
+            # Optional: Optimization with torch.compile
+            if compile:
+                if hasattr(torch, 'compile'):
+                    logger.info("Compiling model for faster inference (Torch 2.0+)...")
+                    self.model = torch.compile(self.model)
+                else:
+                    logger.warning("torch.compile() not available. Skipping.")
             
         except Exception as e:
             logger.error(f"Failed to load model {model_name}: {e}")

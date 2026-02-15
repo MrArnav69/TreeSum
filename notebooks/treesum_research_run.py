@@ -80,9 +80,10 @@ print("initializing treesum (pure semantic, alpha=1.0)...")
 
 summarizer = HierarchicalSummarizer(
     device='cuda' if torch.cuda.is_available() else 'cpu',
-    batch_size=128,
+    batch_size=48, # Optimized for A40 (48GB VRAM) in FP32
     dtype=torch.float32,
-    semantic_weight=1.0
+    semantic_weight=1.0,
+    compile=True if torch.cuda.is_available() else False
 )
 
 results = []

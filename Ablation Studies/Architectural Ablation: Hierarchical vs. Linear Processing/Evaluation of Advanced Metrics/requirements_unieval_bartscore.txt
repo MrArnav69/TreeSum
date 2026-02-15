@@ -1,0 +1,33 @@
+# Requirements for UniEval + BARTScore Evaluation
+# Compatible with torch>=2.0 (A40 GPU environment)
+
+# Core ML/AI libraries
+torch>=2.0.0
+transformers>=4.20.0
+datasets>=2.0.0
+tokenizers>=0.13.0
+
+# UniEval dependencies
+nltk>=3.7
+scikit-learn>=1.1.0
+scipy>=1.8.0
+prettytable>=3.0.0
+
+# BARTScore dependencies
+sentence-transformers>=2.2.0
+
+# Data processing
+pandas>=1.5.0
+numpy>=1.21.0
+tqdm>=4.64.0
+
+# Text processing
+spacy>=3.4.0
+
+# Utilities
+pathlib2>=2.3.0
+python-dateutil>=2.8.0
+
+# GPU acceleration (optional but recommended)
+# Note: Install torch with CUDA support for best performance
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
